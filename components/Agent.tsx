@@ -56,6 +56,18 @@ const Agent = ({userName, userId, type, interviewId,questions}: AgentProps) => {
     }, []);
 
 
+    useEffect(() => {
+        if (typeof document === "undefined") return;
+        const scripts = Array.from(document.getElementsByTagName("script"));
+        const krispScripts = scripts.filter((s) => /krisp/i.test(s.src));
+        if (krispScripts.length > 1) {
+          // keep first, remove the rest
+          for (let i = 1; i < krispScripts.length; i += 1) {
+            krispScripts[i].parentElement?.removeChild(krispScripts[i]);
+          }
+        }
+    }, []);
+
     const handleGenerateFeedback = async (messages:SavedMessage[]) =>{
         console.log("Generate feedback here.");
 
