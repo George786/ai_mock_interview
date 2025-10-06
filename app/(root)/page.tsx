@@ -1,17 +1,19 @@
 import React from 'react'
+
+export const dynamic = "force-dynamic";
 import {Button} from "@/components/ui/button";
 import Link from "next/link";
 import Image from "next/image";
 import InterviewCard from "@/components/InterviewCard";
 import {getCurrentUser} from "@/lib/actions/auth.action";
-import {getInterviewsByUserId, getLatestInterviews} from "@/lib/actions/general.action";
+import {getLatestInterviews, getUserHistoryInterviews} from "@/lib/actions/general.action";
 
 const Page = async () => {
     const user = await getCurrentUser();
 
     const [userInterviews,latestInterviews] = await Promise.all([
-        await getInterviewsByUserId(user?.id!),
-        await getLatestInterviews({userId: user?.id! })
+        getUserHistoryInterviews(user?.id!),
+        getLatestInterviews({userId: user?.id! })
     ]);
 
 
@@ -35,7 +37,7 @@ const Page = async () => {
                 <Image src="/robot.png" alt="robo-dude" width={400} height={400} className="max-sm:hidden"/>
             </section>
 
-            <section className="flexflex-col gap-6 mat-8">
+            <section className="flex flex-col gap-6 mt-8">
                 <h2>Your Interviews</h2>
 
                 <div className="interviews-section">
@@ -43,7 +45,7 @@ const Page = async () => {
                             userInterviews?.map((interview) => (
                                 <InterviewCard  {...interview} key={interview.id}/>
                             ))
-                        ):(<p>There are no new interviews available.</p>)
+                        ):(<p>You haven't taken any interviews yet</p>)
                        }
 
                 </div>
@@ -58,7 +60,7 @@ const Page = async () => {
                         latestInterviews?.map((interview) => (
                             <InterviewCard  {...interview} key={interview.id}/>
                         ))
-                    ):(<p>You haven&apos;t taken any interviews yet</p>)
+                    ):(<p>There are no new interviews available.</p>)
                     }
 
                 </div>

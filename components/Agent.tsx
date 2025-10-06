@@ -1,10 +1,10 @@
 "use client"
 
-import React, {useEffect, useState} from 'react'
+import React, {useEffect, useRef, useState} from 'react'
 import Image from "next/image";
 import {cn} from "@/lib/utils";
 import {useRouter} from "next/navigation";
-import {vapi} from "@/lib/vapi.sdk";
+import {getVapi, getVapiAsync} from "@/lib/vapi.sdk";
 import {interviewer} from "@/constants";
 import {createFeedback} from "@/lib/actions/general.action";
 
@@ -27,51 +27,32 @@ const Agent = ({userName, userId, type, interviewId,questions}: AgentProps) => {
     const [callStatus, setCallStatus] = useState<CallStatus>(CallStatus.INACTIVE);
     const [messages, setMessages] = useState<SavedMessage[]>([]);
 
+    const listenersRegistered = useRef(false);
+    const onCallStart = () => setCallStatus(CallStatus.ACTIVE);
+    const onCallEnd = () => setCallStatus(CallStatus.FINISHED);
+    const onMessage = (message: Message) => {
+      if (message.type === "transcript" && message.transcriptType === "final") {
+        const newMessage = { role: message.role, content: message.transcript };
+        setMessages((prev) => [...prev, newMessage]);
+      }
+    };
+    const onSpeechStart = () => { setIsSpeaking(true); };
+    const onSpeechEnd = () => { setIsSpeaking(false); };
+    const onError = (error: Error) => { console.log("Error:", error); };
+
     useEffect(() => {
-        const onCallStart = () => {
-            setCallStatus(CallStatus.ACTIVE);
-        };
-
-        const onCallEnd = () => {
-            setCallStatus(CallStatus.FINISHED);
-        };
-
-        const onMessage = (message: Message) => {
-            if (message.type === "transcript" && message.transcriptType === "final") {
-                const newMessage = { role: message.role, content: message.transcript };
-                setMessages((prev) => [...prev, newMessage]);
-            }
-        };
-
-        const onSpeechStart = () => {
-            console.log("speech start");
-            setIsSpeaking(true);
-        };
-
-        const onSpeechEnd = () => {
-            console.log("speech end");
-            setIsSpeaking(false);
-        };
-
-        const onError = (error: Error) => {
-            console.log("Error:", error);
-        };
-
-        vapi.on("call-start", onCallStart);
-        vapi.on("call-end", onCallEnd);
-        vapi.on("message", onMessage);
-        vapi.on("speech-start", onSpeechStart);
-        vapi.on("speech-end", onSpeechEnd);
-        vapi.on("error", onError);
-
-        return () => {
-            vapi.off("call-start", onCallStart);
-            vapi.off("call-end", onCallEnd);
-            vapi.off("message", onMessage);
-            vapi.off("speech-start", onSpeechStart);
-            vapi.off("speech-end", onSpeechEnd);
-            vapi.off("error", onError);
-        };
+      return () => {
+        const v = getVapi();
+        if (v && listenersRegistered.current) {
+          v.off("call-start", onCallStart);
+          v.off("call-end", onCallEnd);
+          v.off("message", onMessage);
+          v.off("speech-start", onSpeechStart);
+          v.off("speech-end", onSpeechEnd);
+          v.off("error", onError);
+          listenersRegistered.current = false;
+        }
+      };
     }, []);
 
 
@@ -109,6 +90,17 @@ const Agent = ({userName, userId, type, interviewId,questions}: AgentProps) => {
     const handleCall = async () =>{
         setCallStatus(CallStatus.CONNECTING);
 
+        const vapi = await getVapiAsync();
+        if (!listenersRegistered.current) {
+          vapi.on("call-start", onCallStart);
+          vapi.on("call-end", onCallEnd);
+          vapi.on("message", onMessage);
+          vapi.on("speech-start", onSpeechStart);
+          vapi.on("speech-end", onSpeechEnd);
+          vapi.on("error", onError);
+          listenersRegistered.current = true;
+        }
+
         if (type === "generate") {
             await vapi.start(process.env.NEXT_PUBLIC_VAPI_WORKFLOW_ID!, {
                 variableValues: {
@@ -137,7 +129,8 @@ const Agent = ({userName, userId, type, interviewId,questions}: AgentProps) => {
      const handleDisconnect = async () =>{
         setCallStatus(CallStatus.FINISHED);
 
-        vapi.stop();
+        const vapi = getVapi();
+        vapi?.stop();
      }
 
     const latestMessage = messages[messages.length - 1] ?.content;

@@ -14,6 +14,11 @@ const  InterviewCard = async ({id, userId, role, type, techstack, createdAt}: In
         }): null;
 
     const normalizedType = /mix/gi.test(type) ? "Mixed" : type;
+    const normalizedTech: string[] = Array.isArray(techstack)
+      ? techstack
+      : typeof techstack === "string"
+        ? techstack.split(",").map((t) => t.trim()).filter(Boolean)
+        : [];
     const formattedDate = dayjs(feedback?.createdAt || createdAt || Date.now()).format("MMM D, YYYY")
     return (
         <div className="card-border w-[360px] max-sm:w-full min-h-96">
@@ -42,7 +47,7 @@ const  InterviewCard = async ({id, userId, role, type, techstack, createdAt}: In
                     </p>
                 </div>
 <div className="flex flex-row justify-between">
-   <DisplayTechIcons techStack={techstack} />
+   <DisplayTechIcons techStack={normalizedTech} />
 
     <Button className="btn-primary">
         <Link

@@ -18,22 +18,63 @@ export async function getInterviewsByUserId(userId: string): Promise<Interview[]
     })) as Interview[]
 }
 
+export async function getUserHistoryInterviews(userId: string): Promise<Interview[] | null> {
+    // Interviews created by the user
+    const createdSnapshot = await db
+        .collection("interviews")
+        .where("userId", "==", userId)
+        .get();
+
+    const created = createdSnapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() })) as any[];
+
+    // Interviews taken by the user (based on feedbacks)
+    const feedbackSnapshot = await db
+        .collection("feedback")
+        .where("userId", "==", userId)
+        .get();
+
+    const takenInterviewIds = Array.from(new Set(feedbackSnapshot.docs.map((d) => (d.data() as any).interviewId)));
+
+    const takenDocs = await Promise.all(
+        takenInterviewIds.map(async (id) => {
+            const snap = await db.collection("interviews").doc(id).get();
+            if (!snap.exists) return null;
+            return { id: snap.id, ...snap.data() } as any;
+        })
+    );
+
+    const combinedMap = new Map<string, any>();
+    for (const item of [...created, ...takenDocs.filter(Boolean) as any[]]) {
+        combinedMap.set(item.id, item);
+    }
+
+    const combined = Array.from(combinedMap.values()) as Interview[];
+
+    combined.sort((a: any, b: any) => {
+        const aDate = new Date(a.createdAt ?? 0).getTime();
+        const bDate = new Date(b.createdAt ?? 0).getTime();
+        return bDate - aDate;
+    });
+
+    return combined;
+}
+
 export async function getLatestInterviews(params: GetLatestInterviewsParams): Promise<Interview[] | null> {
     const { userId, limit = 20 } = params;
 
-    const interviews = await db
+    const snapshot = await db
         .collection("interviews")
-        .orderBy("createdAt", "desc")
         .where("finalized","==", true)
-        .where("userId", "!=",userId)
-        .limit(limit)
-        .get()
+        .orderBy("createdAt", "desc")
+        .limit(limit * 3) // fetch extra, we'll filter below
+        .get();
 
-    return interviews.docs.map((doc) => ({
-        id: doc.id,
-        ...doc.data(),
+    const items = snapshot.docs
+        .map((doc) => ({ id: doc.id, ...doc.data() }))
+        .filter((doc: any) => doc.userId !== userId)
+        .slice(0, limit) as Interview[];
 
-    })) as Interview[]
+    return items
 }
 
 export async function getInterviewsById(id: string): Promise<Interview | null> {
